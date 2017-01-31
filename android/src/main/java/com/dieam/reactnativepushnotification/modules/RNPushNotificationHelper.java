@@ -25,6 +25,7 @@ import com.facebook.react.bridge.ReadableMap;
 
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.util.Arrays;
 
@@ -297,7 +298,8 @@ public class RNPushNotificationHelper {
                 for (int i = 0; i < actionsArray.length(); i++) {
                     String action;
                     try {
-                        action = actionsArray.getString(i);
+                        JSONObject actionObject = actionsArray.getJSONObject(i);
+                        action = actionObject.getString("name");
                     } catch (JSONException e) {
                         Log.e(LOG_TAG, "Exception while getting action from actionsArray.", e);
                         continue;

@@ -3,6 +3,7 @@ package com.dieam.reactnativepushnotification.modules;
 import android.app.Activity;
 import android.app.Application;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -21,6 +22,10 @@ import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableMap;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
@@ -31,6 +36,7 @@ public class RNPushNotification extends ReactContextBaseJavaModule implements Ac
     private RNPushNotificationHelper mRNPushNotificationHelper;
     private final Random mRandomNumberGenerator = new Random(System.currentTimeMillis());
     private RNPushNotificationJsDelivery mJsDelivery;
+    private Application mContext;
 
     public RNPushNotification(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -38,6 +44,7 @@ public class RNPushNotification extends ReactContextBaseJavaModule implements Ac
         reactContext.addActivityEventListener(this);
 
         Application applicationContext = (Application) reactContext.getApplicationContext();
+        this.mContext = applicationContext;
         // The @ReactNative methods use this
         mRNPushNotificationHelper = new RNPushNotificationHelper(applicationContext);
         // This is used to delivery callbacks to JS
@@ -94,13 +101,28 @@ public class RNPushNotification extends ReactContextBaseJavaModule implements Ac
             public void onReceive(Context context, Intent intent) {
                 Bundle bundle = intent.getBundleExtra("notification");
 
-                // Notify the action.
-                mJsDelivery.notifyNotificationAction(bundle);
+                try {
+                    JSONArray actions = new JSONArray(bundle.getString("actions"));
+                    String actionPressed = bundle.getString("action");
+                    for (int i = 0; i < actions.length(); i++) {
+                        JSONObject action = actions.getJSONObject(i);
+                        String activationMode = action.getString("activationMode");
+                        String name = action.getString("name");
+                        if (name.equals(actionPressed) && activationMode.equals("foreground")) {
+                            bringApplicationToFront();
+                            break;
+                        }
+                    }
+                    // Notify the action.
+                    mJsDelivery.notifyNotificationAction(bundle);
 
-                // Dismiss the notification popup.
-                NotificationManager manager = (NotificationManager) context.getSystemService(context.NOTIFICATION_SERVICE);
-                int notificationID = Integer.parseInt(bundle.getString("id"));
-                manager.cancel(notificationID);
+                    // Dismiss the notification popup.
+                    NotificationManager manager = (NotificationManager) context.getSystemService(context.NOTIFICATION_SERVICE);
+                    int notificationID = Integer.parseInt(bundle.getString("id"));
+                    manager.cancel(notificationID);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
             }
         }, intentFilter);
     }
@@ -197,5 +219,19 @@ public class RNPushNotification extends ReactContextBaseJavaModule implements Ac
     @ReactMethod
     public void registerNotificationActions(ReadableArray actions) {
         registerNotificationsReceiveNotificationActions(actions);
+    }
+
+    private void bringApplicationToFront() {
+        Intent notificationIntent = new Intent(mContext, mRNPushNotificationHelper.getMainActivityClass());
+        notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent pendingIntent = PendingIntent.getActivity(mContext, 0, notificationIntent, 0);
+        try
+        {
+            pendingIntent.send();
+        }
+        catch (PendingIntent.CanceledException e)
+        {
+            e.printStackTrace();
+        }
     }
 }
